@@ -1,0 +1,17 @@
+[project]
+name = "cryovial"
+version = "0.1.0"
+description = "Host-resident deploy service for container clusters"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "b62ids @ git+https://github.com/AFDudley/b62ids.git",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+cryovial = "cryovial.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
