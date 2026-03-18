@@ -105,6 +105,21 @@ def _run(args: list[str], check: bool = True) -> subprocess.CompletedProcess[str
     return subprocess.run(args, capture_output=True, text=True, check=check)
 
 
+def _get_cluster_name(service_config: ServiceConfig) -> str:
+    """Get the kind cluster name from the deployment's deployment.yml.
+
+    Each laconic-so deployment records its cluster-id in deployment.yml.
+    This is the source of truth — not `kind get clusters`.
+    """
+    deployment_yml = Path(service_config.stack_name) / "deployment.yml"
+    with open(deployment_yml) as f:
+        data = yaml.safe_load(f)
+    cluster_id = data.get("cluster-id")
+    if not cluster_id:
+        raise RuntimeError(f"No cluster-id in {deployment_yml}")
+    return cluster_id
+
+
 def _execute_deploy_operation(
     record: DeployRecord,
     coord_dir: Path,
@@ -150,7 +165,7 @@ def deploy(
 
     def _do_deploy() -> None:
         _run(["docker", "pull", image])
-        _run(["kind", "load", "docker-image", image])
+        _run(["kind", "load", "docker-image", image, "--name", _get_cluster_name(service_config)])
         _run(
             [
                 "laconic-so",
@@ -183,7 +198,7 @@ def rollback(
     record.save(coord_dir)
 
     def _do_rollback() -> None:
-        _run(["kind", "load", "docker-image", deploy_record.previous_image])
+        _run(["kind", "load", "docker-image", deploy_record.previous_image, "--name", _get_cluster_name(service_config)])
         _run(
             [
                 "laconic-so",
