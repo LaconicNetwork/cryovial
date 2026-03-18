@@ -4,8 +4,11 @@ Triggers laconic-so deployment restart. The cluster pulls images
 from GHCR directly (imagePullPolicy: Always).
 """
 
+import logging
 import subprocess
 from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,14 +33,6 @@ def deploy(service_config: ServiceConfig) -> None:
     relative stack-source paths in deployment.yml resolve correctly.
     With imagePullPolicy: Always, k8s pulls the latest image from GHCR.
     """
-    import logging
-
-    log = logging.getLogger(__name__)
-
-    import os
-
-    log.info("cwd=%s GIT_SSH_COMMAND=%s", service_config.repo_dir, os.environ.get("GIT_SSH_COMMAND", "<unset>"))
-
     result = subprocess.run(
         [
             "laconic-so",
