@@ -1,7 +1,8 @@
 """Deploy operations for cluster management.
 
-Triggers laconic-so deployment restart. The cluster pulls images
-from GHCR directly (imagePullPolicy: Always).
+When a SHA-tagged image is provided, restarts the deployment with
+that specific image via laconic-so --image flag. Falls back to a
+plain laconic-so deployment restart when no image is specified.
 """
 
 import logging
@@ -26,27 +27,34 @@ class ServiceConfig:
     repo_dir: str
 
 
-def deploy(service_config: ServiceConfig) -> None:
-    """Restart a service deployment.
+def deploy(service_config: ServiceConfig, image: str | None = None) -> None:
+    """Deploy a service, optionally with a specific image tag.
 
-    Runs laconic-so deployment restart from the repo directory so
-    relative stack-source paths in deployment.yml resolve correctly.
-    With imagePullPolicy: Always, k8s pulls the latest image from GHCR.
+    When image is provided, passes --image to laconic-so deployment
+    restart so the container is updated to the exact SHA-tagged image
+    from CI. When no image is provided, does a plain restart.
     """
+    cmd = [
+        "laconic-so",
+        "deployment",
+        "--dir",
+        service_config.stack_name,
+        "restart",
+    ]
+    if image:
+        cmd.extend(["--image", f"{service_config.name}={image}"])
+        log.info("Deploying with image: %s=%s", service_config.name, image)
+    else:
+        log.info("No image specified, restarting with current image")
+
     result = subprocess.run(
-        [
-            "laconic-so",
-            "deployment",
-            "--dir",
-            service_config.stack_name,
-            "restart",
-        ],
+        cmd,
         cwd=service_config.repo_dir,
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
-        log.error("laconic-so restart failed (stdout): %s", result.stdout.strip())
-        log.error("laconic-so restart failed (stderr): %s", result.stderr.strip())
+        log.error("Deploy failed (stdout): %s", result.stdout.strip())
+        log.error("Deploy failed (stderr): %s", result.stderr.strip())
         result.check_returncode()

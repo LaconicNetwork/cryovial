@@ -60,7 +60,7 @@ class _WebhookHandler(BaseHTTPRequestHandler):
 
         thread = threading.Thread(
             target=self._run_deploy,
-            args=(service_config,),
+            args=(service_config, image or None),
             daemon=True,
         )
         thread.start()
@@ -90,9 +90,9 @@ class _WebhookHandler(BaseHTTPRequestHandler):
             return None
         return data
 
-    def _run_deploy(self, service_config: ServiceConfig) -> None:
+    def _run_deploy(self, service_config: ServiceConfig, image: str | None) -> None:
         try:
-            deploy(service_config)
+            deploy(service_config, image=image)
             log.info("Deploy completed: service=%s", service_config.name)
         except Exception:
             log.exception("Deploy failed: service=%s", service_config.name)
