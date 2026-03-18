@@ -30,7 +30,11 @@ def deploy(service_config: ServiceConfig) -> None:
     relative stack-source paths in deployment.yml resolve correctly.
     With imagePullPolicy: Always, k8s pulls the latest image from GHCR.
     """
-    subprocess.run(
+    import logging
+
+    log = logging.getLogger(__name__)
+
+    result = subprocess.run(
         [
             "laconic-so",
             "deployment",
@@ -41,5 +45,8 @@ def deploy(service_config: ServiceConfig) -> None:
         cwd=service_config.repo_dir,
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
+    if result.returncode != 0:
+        log.error("laconic-so restart failed: %s", result.stderr.strip())
+        result.check_returncode()
