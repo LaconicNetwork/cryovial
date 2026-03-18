@@ -7,6 +7,7 @@ Usage:
 import argparse
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,6 +15,8 @@ import yaml
 
 from .deploy import ServiceConfig
 from .server import WebhookServer
+
+REPO_URL = "git+https://github.com/AFDudley/cryovial.git"
 
 
 def main() -> int:
@@ -28,6 +31,8 @@ def main() -> int:
     serve_parser.add_argument("--port", type=int, default=8090, help="Port (default: 8090)")
     serve_parser.add_argument("--secret", required=True, help="Bearer token for auth")
 
+    subparsers.add_parser("self-update", help="Update cryovial to latest version")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -36,6 +41,9 @@ def main() -> int:
 
     if args.command == "serve":
         return cmd_serve(args)
+
+    if args.command == "self-update":
+        return cmd_self_update()
 
     return 1
 
@@ -89,6 +97,16 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
     server.run()
     return 0
+
+
+def cmd_self_update() -> int:
+    """Update cryovial to latest version from GitHub."""
+    print(f"Updating cryovial from {REPO_URL}")
+    result = subprocess.run(
+        ["uv", "tool", "install", "--force", "--upgrade", REPO_URL],
+        text=True,
+    )
+    return result.returncode
 
 
 if __name__ == "__main__":
