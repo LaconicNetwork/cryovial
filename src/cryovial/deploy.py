@@ -48,5 +48,6 @@ def deploy(service_config: ServiceConfig) -> None:
         check=False,
     )
     if result.returncode != 0:
-        log.error("laconic-so restart failed: %s", result.stderr.strip())
+        log.error("laconic-so restart failed (stdout): %s", result.stdout.strip())
+        log.error("laconic-so restart failed (stderr): %s", result.stderr.strip())
         result.check_returncode()
