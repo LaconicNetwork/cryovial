@@ -67,12 +67,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     services: dict[str, ServiceConfig] = {}
     for name, svc in raw["services"].items():
-        if "stack_name" not in svc:
-            print(f"Service '{name}' missing field: stack_name", file=sys.stderr)
-            return 1
+        for field in ("stack_name", "repo_dir"):
+            if field not in svc:
+                print(f"Service '{name}' missing field: {field}", file=sys.stderr)
+                return 1
         services[name] = ServiceConfig(
             name=name,
             stack_name=svc["stack_name"],
+            repo_dir=svc["repo_dir"],
         )
 
     print(f"Starting cryovial on port {args.port} with {len(services)} services")
