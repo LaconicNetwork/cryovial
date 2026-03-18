@@ -2,11 +2,11 @@
 
 Usage:
     cryovial serve --config services.yml --port 8090 --secret <token>
+    cryovial self-update
 """
 
 import argparse
 import logging
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -67,31 +67,20 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     services: dict[str, ServiceConfig] = {}
     for name, svc in raw["services"].items():
-        for field in ("image", "health_url", "namespace", "label", "stack_name"):
-            if field not in svc:
-                print(f"Service '{name}' missing field: {field}", file=sys.stderr)
-                return 1
+        if "stack_name" not in svc:
+            print(f"Service '{name}' missing field: stack_name", file=sys.stderr)
+            return 1
         services[name] = ServiceConfig(
             name=name,
-            image=svc["image"],
-            health_url=svc["health_url"],
-            namespace=svc["namespace"],
-            label=svc["label"],
             stack_name=svc["stack_name"],
         )
 
-    coord_dir = Path(
-        os.environ.get("CRYOVIAL_COORD_DIR", str(Path.home() / ".cryovial" / "coord"))
-    )
-    coord_dir.mkdir(parents=True, exist_ok=True)
-
     print(f"Starting cryovial on port {args.port} with {len(services)} services")
     for name, svc in services.items():
-        print(f"  {name}: {svc.image}")
+        print(f"  {name}: {svc.stack_name}")
 
     server = WebhookServer(
         services=services,
-        coord_dir=coord_dir,
         secret=args.secret,
         port=args.port,
     )

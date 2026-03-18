@@ -5,15 +5,11 @@ description = "Host-resident deploy service for container clusters"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
-    "b62ids @ git+https://github.com/AFDudley/b62ids.git",
     "pyyaml>=6.0",
 ]
 
 [project.scripts]
 cryovial = "cryovial.cli:main"
-
-[tool.hatch.metadata]
-allow-direct-references = true
 
 [build-system]
 requires = ["hatchling"]

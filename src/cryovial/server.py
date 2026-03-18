@@ -1,7 +1,7 @@
 """Webhook server for deploy notifications.
 
 Receives push notifications from GitHub Actions when new container
-images are built, triggering deploys without polling.
+images are built, triggering deployment restarts.
 
 Uses Python stdlib http.server — no framework dependencies.
 """
@@ -11,9 +11,6 @@ import logging
 import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from pathlib import Path
-
-from b62ids import generate_id
 
 from .deploy import ServiceConfig, deploy
 
@@ -24,7 +21,6 @@ class _ConfiguredHTTPServer(HTTPServer):
     """HTTPServer that holds webhook configuration for handler access."""
 
     services: dict[str, ServiceConfig]
-    coord_dir: Path
     secret: str
 
 
@@ -32,7 +28,7 @@ class _WebhookHandler(BaseHTTPRequestHandler):
     """HTTP request handler for deploy webhook notifications.
 
     Expects POST /deploy/notify with Bearer auth and JSON payload:
-        {"image": "ghcr.io/org/repo:tag", "service": "service-name"}
+        {"service": "service-name"}
     """
 
     server: _ConfiguredHTTPServer  # type: ignore[assignment]
@@ -49,10 +45,9 @@ class _WebhookHandler(BaseHTTPRequestHandler):
         if payload is None:
             return
 
-        image = payload.get("image")
         service_name = payload.get("service")
-        if not image or not service_name:
-            self._error(HTTPStatus.BAD_REQUEST, "missing required fields: image, service")
+        if not service_name:
+            self._error(HTTPStatus.BAD_REQUEST, "missing required field: service")
             return
 
         service_config = self.server.services.get(service_name)
@@ -60,18 +55,16 @@ class _WebhookHandler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.NOT_FOUND, f"unknown service: {service_name}")
             return
 
-        deploy_id = generate_id("deploy")
-
-        log.info("Accepted deploy notification: service=%s image=%s", service_name, image)
+        log.info("Accepted deploy notification: service=%s", service_name)
 
         thread = threading.Thread(
             target=self._run_deploy,
-            args=(service_config, image, deploy_id),
+            args=(service_config,),
             daemon=True,
         )
         thread.start()
 
-        self._respond(HTTPStatus.ACCEPTED, {"deploy_id": deploy_id, "status": "accepted"})
+        self._respond(HTTPStatus.ACCEPTED, {"status": "accepted"})
 
     def do_GET(self) -> None:
         self._error(HTTPStatus.METHOD_NOT_ALLOWED, "use POST")
@@ -96,12 +89,12 @@ class _WebhookHandler(BaseHTTPRequestHandler):
             return None
         return data
 
-    def _run_deploy(self, service_config: ServiceConfig, image: str, deploy_id: str) -> None:
+    def _run_deploy(self, service_config: ServiceConfig) -> None:
         try:
-            record = deploy(service_config, image, self.server.coord_dir)
-            log.info("Deploy completed: %s -> %s", deploy_id, record.id)
+            deploy(service_config)
+            log.info("Deploy completed: service=%s", service_config.name)
         except Exception:
-            log.exception("Deploy failed: %s", deploy_id)
+            log.exception("Deploy failed: service=%s", service_config.name)
 
     def _respond(self, status: HTTPStatus, body: dict) -> None:
         self.send_response(status)
@@ -120,29 +113,16 @@ class _WebhookHandler(BaseHTTPRequestHandler):
 
 
 class WebhookServer:
-    """HTTP webhook server for deploy notifications.
-
-    Args:
-        services: Map of service name to ServiceConfig.
-        coord_dir: Path to coordination directory.
-        secret: Bearer token for request authentication.
-        port: Port to listen on (0 for random available port).
-    """
+    """HTTP webhook server for deploy notifications."""
 
     def __init__(
         self,
         services: dict[str, ServiceConfig],
-        coord_dir: Path,
         secret: str,
         port: int = 8090,
     ) -> None:
-        self.services = services
-        self.coord_dir = coord_dir
-        self.secret = secret
-
         self._httpd = _ConfiguredHTTPServer(("0.0.0.0", port), _WebhookHandler)
         self._httpd.services = services
-        self._httpd.coord_dir = coord_dir
         self._httpd.secret = secret
         self.port = self._httpd.server_address[1]
 
