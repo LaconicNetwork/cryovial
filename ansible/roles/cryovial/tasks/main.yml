@@ -1,0 +1,111 @@
+---
+# Deploy the cryovial container to a kind cluster via laconic-so.
+#
+# Expects prerequisites role to have run first (Docker, kind, kubectl,
+# laconic-so all installed, kind cluster running).
+
+- name: Create stack directory
+  file:
+    path: "{{ cryovial_stack_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy stack files
+  synchronize:
+    src: "{{ playbook_dir }}/../stacks/cryovial/"
+    dest: "{{ cryovial_stack_dir }}/"
+    delete: true
+    rsync_opts:
+      - "--exclude=.git"
+
+- name: Pull cryovial image
+  command: "docker pull {{ cryovial_image }}"
+  register: pull_result
+  changed_when: "'Downloaded newer image' in pull_result.stdout or 'Pull complete' in pull_result.stdout"
+
+- name: Load cryovial image into kind
+  command: "kind load docker-image {{ cryovial_image }} --name {{ kind_cluster_name }}"
+
+- name: Apply RBAC
+  command: "kubectl apply -f {{ cryovial_stack_dir }}/rbac.yml"
+  register: rbac_result
+  changed_when: "'created' in rbac_result.stdout or 'configured' in rbac_result.stdout"
+
+- name: Create cryovial namespace
+  command: "kubectl apply -f -"
+  args:
+    stdin: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: laconic-cryovial
+        labels:
+          app: cryovial
+  register: ns_result
+  changed_when: "'created' in ns_result.stdout"
+
+- name: Write SSH pubkey to temp file
+  copy:
+    content: "{{ cryovial_ssh_pubkey }}"
+    dest: /tmp/exophial_authorized_keys
+    mode: "0600"
+
+- name: Create SSH authorized_keys secret
+  command: >
+    kubectl create secret generic cryovial-ssh-keys
+    --namespace laconic-cryovial
+    --from-file=authorized_keys=/tmp/exophial_authorized_keys
+    --dry-run=client -o yaml
+  register: ssh_secret_yaml
+  changed_when: false
+
+- name: Remove temp pubkey file
+  file:
+    path: /tmp/exophial_authorized_keys
+    state: absent
+
+- name: Apply SSH authorized_keys secret
+  command: "kubectl apply -f -"
+  args:
+    stdin: "{{ ssh_secret_yaml.stdout }}"
+  register: secret_result
+  changed_when: "'created' in secret_result.stdout or 'configured' in secret_result.stdout"
+
+- name: Create ConfigMap from config.env
+  command: >
+    kubectl create configmap cryovial-config
+    --namespace laconic-cryovial
+    --from-env-file={{ cryovial_stack_dir }}/deployment/config.env
+    --dry-run=client -o yaml
+  register: configmap_yaml
+  changed_when: false
+
+- name: Apply ConfigMap
+  command: "kubectl apply -f -"
+  args:
+    stdin: "{{ configmap_yaml.stdout }}"
+  register: cm_result
+  changed_when: "'created' in cm_result.stdout or 'configured' in cm_result.stdout"
+
+- name: Apply deployment spec
+  command: "kubectl apply -f {{ cryovial_stack_dir }}/deployment/spec.yml"
+  register: deploy_result
+  changed_when: "'created' in deploy_result.stdout or 'configured' in deploy_result.stdout"
+
+- name: Wait for cryovial pod to be ready
+  command: >
+    kubectl wait --for=condition=ready pod
+    -l app=cryovial
+    --namespace laconic-cryovial
+    --timeout=120s
+  register: wait_result
+  changed_when: false
+
+- name: Verify cryovial is running
+  command: "kubectl get pods -n laconic-cryovial -l app=cryovial -o wide"
+  register: pod_status
+  changed_when: false
+
+- name: Show cryovial pod status
+  debug:
+    msg: "{{ pod_status.stdout }}"

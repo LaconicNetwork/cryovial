@@ -1,0 +1,117 @@
+---
+# Install Docker, kind, kubectl, crane, laconic-so, and create a kind cluster.
+#
+# Idempotent — safe to re-run. Skips steps where binaries already exist
+# at the expected version.
+
+- name: Install Docker
+  block:
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Docker via convenience script
+      when: docker_check.rc != 0
+      shell: curl -fsSL https://get.docker.com | sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+
+    - name: Ensure Docker is running
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+  become: true
+
+- name: Install kubectl
+  block:
+    - name: Check kubectl version
+      command: kubectl version --client -o yaml
+      register: kubectl_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download kubectl {{ kubectl_version }}
+      get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+      when: kubectl_check.rc != 0 or kubectl_version not in (kubectl_check.stdout | default(''))
+  become: true
+
+- name: Install kind
+  block:
+    - name: Check kind version
+      command: kind version
+      register: kind_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download kind {{ kind_version }}
+      get_url:
+        url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-linux-amd64"
+        dest: /usr/local/bin/kind
+        mode: "0755"
+      when: kind_check.rc != 0 or kind_version not in (kind_check.stdout | default(''))
+  become: true
+
+- name: Install crane
+  block:
+    - name: Check if crane is installed
+      command: crane version
+      register: crane_check
+      changed_when: false
+      failed_when: false
+
+    - name: Download and extract crane {{ crane_version }}
+      when: crane_check.rc != 0
+      unarchive:
+        src: "https://github.com/google/go-containerregistry/releases/download/{{ crane_version }}/go-containerregistry_Linux_x86_64.tar.gz"
+        dest: /usr/local/bin
+        remote_src: true
+        include: [crane]
+        mode: "0755"
+  become: true
+
+- name: Install laconic-so
+  block:
+    - name: Check if laconic-so is installed
+      command: laconic-so version
+      register: laconic_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install Node.js (if needed for npm)
+      apt:
+        name: [nodejs, npm]
+        state: present
+        update_cache: true
+      become: true
+      when: laconic_check.rc != 0
+
+    - name: Install laconic-so via npm
+      npm:
+        name: "@cerc-io/laconic-so-cli"
+        global: true
+        state: "{{ 'latest' if laconic_so_version == 'latest' else 'present' }}"
+      become: true
+      when: laconic_check.rc != 0
+
+- name: Create kind cluster
+  block:
+    - name: Check if kind cluster exists
+      command: "kind get clusters"
+      register: kind_clusters
+      changed_when: false
+
+    - name: Create kind cluster {{ kind_cluster_name }}
+      command: "kind create cluster --name {{ kind_cluster_name }}"
+      when: kind_cluster_name not in kind_clusters.stdout_lines
