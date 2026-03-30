@@ -23,6 +23,8 @@ COOLDOWN_SECONDS = 300  # 5 minutes
 class _ConfiguredHTTPServer(HTTPServer):
     """HTTPServer that holds webhook configuration for handler access."""
 
+    allow_reuse_address = True
+
     services: dict[str, ServiceConfig]
     secret: str
     last_deploy: dict[str, float]  # stack_name -> monotonic timestamp
