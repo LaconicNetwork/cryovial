@@ -1,0 +1,13 @@
+---
+all:
+  hosts:
+    biscayne:
+      ansible_host: biscayne.vaasl.io
+      cryovial_service_user: rix
+      cryovial_service_user_home: /home/rix
+      cryovial_service_secret: "Ge-Q1W5p4ypnCyWyFhcvr4b9V5LkeGsIa_Y1DZLktNI"
+      cryovial_service_port: 8090
+      cryovial_service_services:
+        mtm-gateway:
+          stack_name: /home/jjames/mtm-fixturenet/stack-orchestrator/compose
+          repo_dir: /home/jjames/mtm-fixturenet/stack-orchestrator/compose
