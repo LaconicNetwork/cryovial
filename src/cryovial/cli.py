@@ -82,15 +82,30 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
     services: dict[str, ServiceConfig] = {}
     for name, svc in raw["services"].items():
-        for field in ("stack_name", "repo_dir"):
-            if field not in svc:
-                print(f"Service '{name}' missing field: {field}", file=sys.stderr)
-                return 1
-        services[name] = ServiceConfig(
-            name=name,
-            stack_name=svc["stack_name"],
-            repo_dir=svc["repo_dir"],
-        )
+        deploy_type = svc.get("deploy_type", "laconic_so")
+        if deploy_type == "artifact":
+            for req_field in ("artifact_url_template", "binary_path", "service_name"):
+                if req_field not in svc:
+                    print(f"Service '{name}' (artifact) missing field: {req_field}", file=sys.stderr)
+                    return 1
+            services[name] = ServiceConfig(
+                name=name,
+                deploy_type="artifact",
+                artifact_url_template=svc["artifact_url_template"],
+                binary_path=svc["binary_path"],
+                service_name=svc["service_name"],
+            )
+        else:
+            for req_field in ("stack_name", "repo_dir"):
+                if req_field not in svc:
+                    print(f"Service '{name}' missing field: {req_field}", file=sys.stderr)
+                    return 1
+            services[name] = ServiceConfig(
+                name=name,
+                deploy_type="laconic_so",
+                stack_name=svc["stack_name"],
+                repo_dir=svc["repo_dir"],
+            )
 
     print(f"Starting cryovial on port {args.port} with {len(services)} services")
     for name, svc in services.items():

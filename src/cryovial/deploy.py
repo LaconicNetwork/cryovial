@@ -1,15 +1,21 @@
-"""Deploy operations for cluster management.
+"""Deploy operations — laconic-so stacks and bare-host binaries.
 
-When a SHA-tagged image is provided, restarts the deployment with
-that specific image via laconic-so --image flag. Falls back to a
-plain laconic-so deployment restart when no image is specified.
+Two deploy backends:
+  - laconic_so: restarts a laconic-so deployment, optionally with a
+    SHA-tagged container image.
+  - artifact: downloads a pre-built binary from a URL and restarts
+    a systemd service.
 
 Deploy records are written to ~/.cryovial/deploys/ as YAML files,
 tracking accept/complete/fail status with timestamps.
 """
 
 import logging
+import os
+import stat
 import subprocess
+import tempfile
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,13 +34,21 @@ class ServiceConfig:
 
     Attributes:
         name: Human-readable service name (e.g., "dumpster-backend").
-        stack_name: laconic-so deployment directory path.
-        repo_dir: Path to the stack repo (cwd for laconic-so commands).
+        deploy_type: "laconic_so" (default) or "artifact".
+        stack_name: laconic-so deployment directory path (laconic_so only).
+        repo_dir: Path to the stack repo (laconic_so only).
+        artifact_url_template: URL template with {tag} placeholder (artifact only).
+        binary_path: Install path for downloaded binary (artifact only).
+        service_name: systemd service to restart (artifact only).
     """
 
     name: str
-    stack_name: str
-    repo_dir: str
+    deploy_type: str = "laconic_so"
+    stack_name: str = ""
+    repo_dir: str = ""
+    artifact_url_template: str = ""
+    binary_path: str = ""
+    service_name: str = ""
 
 
 def _short_id() -> str:
@@ -127,24 +141,12 @@ def _wait_for_namespace(namespace: str) -> None:
         )
 
 
-def deploy(
+def _deploy_laconic_so(
     service_config: ServiceConfig,
     image: str | None = None,
     record: DeployRecord | None = None,
 ) -> None:
-    """Deploy a service, optionally with a specific image tag.
-
-    When image is provided, passes --image to laconic-so deployment
-    restart so the container is updated to the exact SHA-tagged image
-    from CI. When no image is provided, does a plain restart.
-
-    When record is provided, stdout/stderr from the subprocess are
-    captured into the record fields for audit and debugging.
-
-    Waits for namespace to finish Terminating before proceeding,
-    to avoid race conditions with kubernetes resource creation.
-    """
-    # Wait for any Terminating namespace to clear before restarting
+    """Deploy via laconic-so deployment restart."""
     _wait_for_namespace(service_config.stack_name)
 
     cmd = [
@@ -168,7 +170,6 @@ def deploy(
         check=False,
     )
 
-    # Always capture output into the record for audit
     if record is not None:
         record.stdout = result.stdout
         record.stderr = result.stderr
@@ -177,3 +178,65 @@ def deploy(
         log.error("Deploy failed (stdout): %s", result.stdout.strip())
         log.error("Deploy failed (stderr): %s", result.stderr.strip())
         result.check_returncode()
+
+
+def _deploy_artifact(
+    service_config: ServiceConfig,
+    tag: str | None = None,
+    record: DeployRecord | None = None,
+) -> None:
+    """Deploy a pre-built binary artifact.
+
+    Downloads the binary from artifact_url_template (with {tag}
+    substituted), installs it to binary_path, and restarts the
+    systemd service.
+    """
+    if not tag:
+        raise ValueError("artifact deploy requires a tag (pass as 'image' in webhook payload)")
+
+    url = service_config.artifact_url_template.replace("{tag}", tag)
+    binary_path = Path(service_config.binary_path)
+
+    log.info("Downloading artifact: %s → %s", url, binary_path)
+
+    # Download to a temp file, then atomic rename
+    with tempfile.NamedTemporaryFile(
+        dir=binary_path.parent, prefix=f".{binary_path.name}.", delete=False
+    ) as tmp:
+        tmp_path = Path(tmp.name)
+        try:
+            urllib.request.urlretrieve(url, tmp_path)
+            os.chmod(tmp_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+            tmp_path.rename(binary_path)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    log.info("Installed %s, restarting %s", binary_path, service_config.service_name)
+
+    result = subprocess.run(
+        ["systemctl", "restart", service_config.service_name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if record is not None:
+        record.stdout = result.stdout
+        record.stderr = result.stderr
+
+    if result.returncode != 0:
+        log.error("Restart failed: %s", result.stderr.strip())
+        result.check_returncode()
+
+
+def deploy(
+    service_config: ServiceConfig,
+    image: str | None = None,
+    record: DeployRecord | None = None,
+) -> None:
+    """Deploy a service. Dispatches to the correct backend based on deploy_type."""
+    if service_config.deploy_type == "artifact":
+        _deploy_artifact(service_config, tag=image, record=record)
+    else:
+        _deploy_laconic_so(service_config, image=image, record=record)

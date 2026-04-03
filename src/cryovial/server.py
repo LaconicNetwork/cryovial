@@ -62,7 +62,7 @@ class _WebhookHandler(BaseHTTPRequestHandler):
             self._error(HTTPStatus.NOT_FOUND, f"unknown service: {service_name}")
             return
 
-        stack = service_config.stack_name
+        stack = service_config.stack_name or service_config.service_name
         now = time.monotonic()
         last = self.server.last_deploy.get(stack, 0.0)
         elapsed = now - last
