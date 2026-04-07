@@ -3,7 +3,6 @@ name = "cryovial"
 version = "0.1.0"
 description = "Host-resident deploy service for container clusters"
 requires-python = ">=3.11"
-license = "MIT"
 dependencies = [
     "pyyaml>=6.0",
 ]
