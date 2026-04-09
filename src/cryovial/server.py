@@ -12,6 +12,7 @@ import threading
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
 from typing import Any
 
 from .deploy import DeployRecord, ServiceConfig, deploy
@@ -21,10 +22,16 @@ log = logging.getLogger(__name__)
 COOLDOWN_SECONDS = 300  # 5 minutes
 
 
-class _ConfiguredHTTPServer(HTTPServer):
-    """HTTPServer that holds webhook configuration for handler access."""
+class _ConfiguredHTTPServer(ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server that holds webhook configuration for handler access.
+
+    ThreadingMixIn handles each connection in a separate thread, preventing
+    a single slow/stale connection (e.g. a port scanner) from blocking the
+    entire server.
+    """
 
     allow_reuse_address = True
+    daemon_threads = True
 
     services: dict[str, ServiceConfig]
     secret: str
@@ -38,6 +45,7 @@ class _WebhookHandler(BaseHTTPRequestHandler):
         {"service": "service-name"}
     """
 
+    timeout = 30  # seconds — drop connections that don't send data
     server: _ConfiguredHTTPServer
 
     def do_POST(self) -> None:
