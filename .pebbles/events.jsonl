@@ -1,9 +1,31 @@
-{"type": "create", "timestamp": "2026-03-18T13:19:32.863000Z", "issue_id": "cv-a1a", "payload": {"title": "Check for terminating namespace before restarting deployment", "type": "bug", "priority": "2", "description": "laconic-so deployment restart fails with 403 Forbidden if the target\nnamespace is in Terminating state (from a previous restart). Cryovial should\ncheck namespace status before calling restart and wait for termination to\ncomplete.\n\nError: unable to create new content in namespace laconic-laconic-<id>\nbecause it is being terminated\n\nFix: before calling laconic-so restart, run kubectl get ns <namespace> and\ncheck if status.phase is Terminating. If so, wait (with timeout) for it to\ndisappear, then proceed."}}
+{"type": "create", "timestamp": "2026-03-18T13:19:32.863000Z", "issue_id": "cv-a1a", "payload": {"title": "Check for terminating namespace before restarting deployment", "type": "bug", "priority": "2", "description": "laconic-so deployment restart fails with 403 Forbidden if the target
+namespace is in Terminating state (from a previous restart). Cryovial should
+check namespace status before calling restart and wait for termination to
+complete.
+
+Error: unable to create new content in namespace laconic-laconic-<id>
+because it is being terminated
+
+Fix: before calling laconic-so restart, run kubectl get ns <namespace> and
+check if status.phase is Terminating. If so, wait (with timeout) for it to
+disappear, then proceed."}}
 {"type": "create", "timestamp": "2026-03-18T14:38:13.370493Z", "issue_id": "cv-b2b", "payload": {"title": "GHCR auth: k8s cluster needs imagePullSecret for private images", "type": "bug", "priority": "1", "description": "Pods fail with ImagePullBackOff/401 Unauthorized when pulling from ghcr.io/gorbagana-dev/. The k8s cluster has no imagePullSecret for GHCR. Previous deploys used kind load to sidestep this. With imagePullPolicy: Always the cluster needs GHCR credentials. Options: create imagePullSecret from ghcr_token, or make packages public."}}
-{"type": "update", "timestamp": "2026-03-18T14:46:21.503532Z", "issue_id": "cv-b2b", "payload": {"status": "closed", "resolution": "Not a cryovial issue. Moved to wd-h4h and wd-f2f in woodburn_deployer \u2014 laconic-so needs REGISTRY_TOKEN in config.env to create imagePullSecrets."}}
-{"type": "create", "timestamp": "2026-03-18T20:15:00.000000Z", "issue_id": "cv-c3c", "payload": {"title": "Deploy ignores image from webhook — uses :latest tag causing no-op deploys", "type": "bug", "priority": "1", "description": "CI pushes SHA-tagged images (e.g. dumpster-backend:8806996...) and sends the tag in the webhook payload. But deploy() ignores the image field and calls laconic-so deployment restart with no image argument. laconic-so patches the Deployment with the same :latest tag. k8s sees no diff, no rolling update, no image re-pull.\n\nFix: deploy() accepts image param from webhook. Uses kubectl to patch the k8s Deployment container image directly with the SHA tag. k8s sees different tag → rolling update.\n\nFiles: src/cryovial/deploy.py (accept image, kubectl patch), src/cryovial/server.py (pass image from payload to deploy)."}}
-{"type": "create", "timestamp": "2026-03-18T20:15:01.000000Z", "issue_id": "cv-d4d", "payload": {"title": "No deploy records — failures are invisible", "type": "bug", "priority": "2", "description": "Cryovial is fire-and-forget. No deploy records, no way to query status. Deploy failures are invisible — daemon thread catches exception, logs it, but logs go to stdout of a manually-started process.\n\nFix: Add DeployRecord dataclass. Write YAML file per deploy to ~/.cryovial/deploys/ with id, service, image, status (accepted/completed/failed), timestamps, error. Write record on accept, update on completion/failure.\n\nFiles: src/cryovial/deploy.py (DeployRecord, write records)."}}
-{"type": "create", "timestamp": "2026-03-18T20:15:02.000000Z", "issue_id": "cv-e5e", "payload": {"title": "No concurrency control — overlapping deploys on rapid webhooks", "type": "bug", "priority": "2", "description": "Two webhooks arriving close together (frontend + backend CI finish simultaneously) spawn two deploy threads that overlap on the same deployment directory. Race conditions on laconic-so commands.\n\nFix: Per-deployment cooldown. Track last deploy timestamp per stack_name. If a deploy for the same stack_name completed within 5 minutes, skip (return 429 Too Many Requests). Simple, no locks or queues.\n\nFiles: src/cryovial/server.py (track timestamps, check cooldown in do_POST)."}}
+{"type": "update", "timestamp": "2026-03-18T14:46:21.503532Z", "issue_id": "cv-b2b", "payload": {"status": "closed", "resolution": "Not a cryovial issue. Moved to wd-h4h and wd-f2f in woodburn_deployer — laconic-so needs REGISTRY_TOKEN in config.env to create imagePullSecrets."}}
+{"type": "create", "timestamp": "2026-03-18T20:15:00.000000Z", "issue_id": "cv-c3c", "payload": {"title": "Deploy ignores image from webhook — uses :latest tag causing no-op deploys", "type": "bug", "priority": "1", "description": "CI pushes SHA-tagged images (e.g. dumpster-backend:8806996...) and sends the tag in the webhook payload. But deploy() ignores the image field and calls laconic-so deployment restart with no image argument. laconic-so patches the Deployment with the same :latest tag. k8s sees no diff, no rolling update, no image re-pull.
+
+Fix: deploy() accepts image param from webhook. Uses kubectl to patch the k8s Deployment container image directly with the SHA tag. k8s sees different tag → rolling update.
+
+Files: src/cryovial/deploy.py (accept image, kubectl patch), src/cryovial/server.py (pass image from payload to deploy)."}}
+{"type": "create", "timestamp": "2026-03-18T20:15:01.000000Z", "issue_id": "cv-d4d", "payload": {"title": "No deploy records — failures are invisible", "type": "bug", "priority": "2", "description": "Cryovial is fire-and-forget. No deploy records, no way to query status. Deploy failures are invisible — daemon thread catches exception, logs it, but logs go to stdout of a manually-started process.
+
+Fix: Add DeployRecord dataclass. Write YAML file per deploy to ~/.cryovial/deploys/ with id, service, image, status (accepted/completed/failed), timestamps, error. Write record on accept, update on completion/failure.
+
+Files: src/cryovial/deploy.py (DeployRecord, write records)."}}
+{"type": "create", "timestamp": "2026-03-18T20:15:02.000000Z", "issue_id": "cv-e5e", "payload": {"title": "No concurrency control — overlapping deploys on rapid webhooks", "type": "bug", "priority": "2", "description": "Two webhooks arriving close together (frontend + backend CI finish simultaneously) spawn two deploy threads that overlap on the same deployment directory. Race conditions on laconic-so commands.
+
+Fix: Per-deployment cooldown. Track last deploy timestamp per stack_name. If a deploy for the same stack_name completed within 5 minutes, skip (return 429 Too Many Requests). Simple, no locks or queues.
+
+Files: src/cryovial/server.py (track timestamps, check cooldown in do_POST)."}}
 {"type":"status_update","timestamp":"2026-03-18T21:54:44.07663532Z","issue_id":"cv-c3c","payload":{"status":"in_progress"}}
 {"type":"status_update","timestamp":"2026-03-18T21:54:51.021363269Z","issue_id":"cv-c3c","payload":{"status":"in_progress"}}
 {"type":"status_update","timestamp":"2026-03-18T21:54:59.245747299Z","issue_id":"cv-c3c","payload":{"status":"in_progress"}}
@@ -22,3 +44,10 @@
 {"type":"status_update","timestamp":"2026-03-18T22:40:53.073823199Z","issue_id":"cv-c3c","payload":{"status":"in_progress"}}
 {"type":"title_updated","timestamp":"2026-03-18T22:40:53.073823199Z","issue_id":"cv-c3c","payload":{"title":"Deploy ignores image from webhook"}}
 {"type":"close","timestamp":"2026-03-18T22:43:56.810684063Z","issue_id":"cv-c3c","payload":{}}
+{"type": "create", "timestamp": "2026-04-10T19:30:00.000000Z", "issue_id": "cv-f6f", "payload": {"title": "Artifact download fails on private repos — no GitHub App auth on HTTP request", "type": "bug", "priority": "1", "description": "When deploy_type is artifact and the repo is private, cryovial downloads the release asset via urllib without authentication. GitHub returns 404 for private repo assets without a token.
+
+Cryovial has GITHUB_APP_ID/PEM configured but the artifact download path does not generate an installation token or attach an Authorization header to the download request.
+
+Reproduced: mark-2-marquette/sniper (private) → release build-20260410-192446-ff2e77c → cryovial gets 404 on sniper-x86_64-linux asset URL.
+
+Fix: Before downloading, generate a GitHub App installation token (POST /app/installations/{id}/access_tokens with JWT), then pass Authorization: token <tok> header on the asset download request. The GitHub API returns a redirect to a signed S3 URL — follow it."}}
