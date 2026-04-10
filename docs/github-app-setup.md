@@ -25,7 +25,7 @@ GitHub App (per host)           cryovial on host
 
 2. Fill in:
    - **GitHub App name**: `cryovial-<hostname>` (e.g. `cryovial-waxpool`)
-   - **Homepage URL**: `https://github.com/AFDudley/cryovial`
+   - **Homepage URL**: `https://github.com/LaconicNetwork/cryovial`
    - **Webhook**: uncheck "Active" (we don't need webhook events)
 
 3. **Permissions** → Repository permissions:
@@ -76,7 +76,7 @@ GITHUB_APP_PEM=/etc/cryovial/github-app.pem
 Reinstall cryovial (to pick up PyJWT dependency) and restart:
 
 ```bash
-uv tool install --force --reinstall git+https://github.com/AFDudley/cryovial.git@main
+uv tool install --force --reinstall git+https://github.com/LaconicNetwork/cryovial.git@main
 sudo systemctl restart cryovial
 ```
 

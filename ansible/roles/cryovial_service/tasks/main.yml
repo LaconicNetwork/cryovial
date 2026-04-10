@@ -32,7 +32,7 @@
   ansible.builtin.command: >
     {{ cryovial_service_user_home }}/.local/bin/uv tool install
     --force --reinstall
-    git+https://github.com/AFDudley/cryovial.git@main
+    git+https://github.com/LaconicNetwork/cryovial.git@main
   become: true
   become_user: "{{ cryovial_service_user }}"
   changed_when: true

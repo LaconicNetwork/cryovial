@@ -61,7 +61,7 @@ container or k8s pod.
 
 ```bash
 # Install
-uv tool install git+https://github.com/AFDudley/cryovial.git
+uv tool install git+https://github.com/LaconicNetwork/cryovial.git
 
 # Update
 cryovial self-update

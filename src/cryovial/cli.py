@@ -17,7 +17,7 @@ import yaml
 from .deploy import ServiceConfig
 from .server import WebhookServer
 
-REPO_URL = "git+https://github.com/AFDudley/cryovial.git"
+REPO_URL = "git+https://github.com/LaconicNetwork/cryovial.git"
 
 
 def main() -> int:
