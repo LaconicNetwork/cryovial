@@ -61,8 +61,8 @@ GitHub App (per host)           cryovial on host
 Copy the PEM to the host:
 
 ```bash
-scp <downloaded-pem-file> <user>@<host>:/tmp/github-app.pem
-ssh <user>@<host> 'sudo mv /tmp/github-app.pem /etc/cryovial/github-app.pem && sudo chown <cryovial-user>:<cryovial-user> /etc/cryovial/github-app.pem && sudo chmod 600 /etc/cryovial/github-app.pem'
+scp <downloaded-pem-file> <user>@<host>:/etc/cryovial/github-app.pem
+ssh <user>@<host> 'sudo chmod 600 /etc/cryovial/github-app.pem'
 ```
 
 Add the app ID and installation ID to `/etc/cryovial/env`:
