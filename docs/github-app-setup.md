@@ -32,7 +32,8 @@ GitHub App (per host)           cryovial on host
    - **Contents**: Read-only (this is all we need for release downloads)
    - Leave everything else as "No access"
 
-4. **Where can this GitHub App be installed?**: "Only on this account"
+4. **Where can this GitHub App be installed?**: "Any account"
+   (allows installing on multiple orgs, e.g. mark-2-marquette + rjk-laconic)
 
 5. Click **Create GitHub App**
 
