@@ -10,6 +10,7 @@ Deploy records are written to ~/.cryovial/deploys/ as YAML files,
 tracking accept/complete/fail status with timestamps.
 """
 
+import json
 import logging
 import os
 import stat
@@ -181,6 +182,68 @@ def _deploy_laconic_so(
         result.check_returncode()
 
 
+def _download_private_release(
+    url: str, token: str, dest_file: tempfile.NamedTemporaryFile  # type: ignore[type-arg]
+) -> None:
+    """Download a release asset from a private GitHub repo.
+
+    GitHub's release download URLs redirect to CDN, which rejects the
+    Authorization header. Instead, use the API to resolve the asset ID,
+    then request the asset with Accept: application/octet-stream —
+    GitHub returns the binary directly without a redirect.
+
+    Args:
+        url: Browser-style release download URL containing owner/repo/tag/asset name.
+        token: GitHub installation access token.
+        dest_file: Open temp file to write the binary into.
+
+    """
+    # Parse owner, repo, tag, and asset name from the URL
+    # Format: https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}
+    parts = url.split("/")
+    if len(parts) < 9 or parts[5] != "releases" or parts[6] != "download":
+        raise ValueError(f"Cannot parse GitHub release URL: {url}")
+    owner, repo = parts[3], parts[4]
+    release_tag = parts[7]
+    asset_name = "/".join(parts[8:])
+
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    # Step 1: Get the release by tag
+    release_url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{release_tag}"
+    req = urllib.request.Request(release_url, headers=headers)
+    log.info("Looking up release: %s/%s tag=%s", owner, repo, release_tag)
+    with urllib.request.urlopen(req) as resp:
+        release = json.loads(resp.read())
+
+    # Step 2: Find the asset by name
+    asset_id = None
+    for asset in release.get("assets", []):
+        if asset["name"] == asset_name:
+            asset_id = asset["id"]
+            break
+    if not asset_id:
+        available = [a["name"] for a in release.get("assets", [])]
+        raise ValueError(
+            f"Asset '{asset_name}' not found in release {release_tag}. "
+            f"Available: {available}"
+        )
+
+    # Step 3: Download the asset via API (returns binary directly, no redirect)
+    asset_url = f"https://api.github.com/repos/{owner}/{repo}/releases/assets/{asset_id}"
+    dl_headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/octet-stream",
+    }
+    dl_req = urllib.request.Request(asset_url, headers=dl_headers)
+    log.info("Downloading asset %s (id=%s) via API", asset_name, asset_id)
+    with urllib.request.urlopen(dl_req) as resp:
+        dest_file.write(resp.read())
+
+
 def _deploy_artifact(
     service_config: ServiceConfig,
     tag: str | None = None,
@@ -200,15 +263,9 @@ def _deploy_artifact(
 
     log.info("Downloading artifact: %s → %s", url, binary_path)
 
-    # Build request, optionally with GitHub App auth for private repos
     from cryovial.github_auth import get_token
 
-    req = urllib.request.Request(url)
     token = get_token()
-    if token:
-        req.add_header("Authorization", f"token {token}")
-        req.add_header("Accept", "application/octet-stream")
-        log.info("Using GitHub App token for authenticated download")
 
     # Download to a temp file, then atomic rename
     with tempfile.NamedTemporaryFile(
@@ -216,8 +273,10 @@ def _deploy_artifact(
     ) as tmp:
         tmp_path = Path(tmp.name)
         try:
-            with urllib.request.urlopen(req) as resp:
-                tmp.write(resp.read())
+            if token:
+                _download_private_release(url, token, tmp)
+            else:
+                urllib.request.urlretrieve(url, tmp_path)
             os.chmod(
                 tmp_path,
                 stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH,
