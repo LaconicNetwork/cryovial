@@ -5,6 +5,7 @@ description = "Host-resident deploy service for container clusters"
 requires-python = ">=3.11"
 dependencies = [
     "pyyaml>=6.0",
+    "pyjwt[crypto]>=2.8",
 ]
 
 [project.scripts]
@@ -52,7 +53,7 @@ warn_return_any = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-module = ["yaml"]
+module = ["yaml", "jwt"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

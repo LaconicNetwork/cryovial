@@ -2,3 +2,6 @@
 cryovial_service_port: 8090
 cryovial_service_registry_token: ""
 cryovial_service_path_extra: ""
+cryovial_service_github_app_id: ""
+cryovial_service_github_app_installation_id: ""
+cryovial_service_github_app_pem: "/etc/cryovial/github-app.pem"

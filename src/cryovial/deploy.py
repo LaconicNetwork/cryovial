@@ -40,6 +40,7 @@ class ServiceConfig:
         artifact_url_template: URL template with {tag} placeholder (artifact only).
         binary_path: Install path for downloaded binary (artifact only).
         service_name: systemd service to restart (artifact only).
+
     """
 
     name: str
@@ -199,14 +200,28 @@ def _deploy_artifact(
 
     log.info("Downloading artifact: %s → %s", url, binary_path)
 
+    # Build request, optionally with GitHub App auth for private repos
+    from cryovial.github_auth import get_token
+
+    req = urllib.request.Request(url)
+    token = get_token()
+    if token:
+        req.add_header("Authorization", f"token {token}")
+        req.add_header("Accept", "application/octet-stream")
+        log.info("Using GitHub App token for authenticated download")
+
     # Download to a temp file, then atomic rename
     with tempfile.NamedTemporaryFile(
         dir=binary_path.parent, prefix=f".{binary_path.name}.", delete=False
     ) as tmp:
         tmp_path = Path(tmp.name)
         try:
-            urllib.request.urlretrieve(url, tmp_path)
-            os.chmod(tmp_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+            with urllib.request.urlopen(req) as resp:
+                tmp.write(resp.read())
+            os.chmod(
+                tmp_path,
+                stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH,
+            )
             tmp_path.rename(binary_path)
         except Exception:
             tmp_path.unlink(missing_ok=True)
